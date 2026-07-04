@@ -1,9 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import html2canvas from 'html2canvas'
 import QRCode from 'qrcode'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { flushSync } from 'react-dom'
-import { createRoot } from 'react-dom/client'
 import FormPanel from './components/FormPanel'
 import SignPreview from './components/SignPreview'
 
@@ -35,9 +33,11 @@ export default function App() {
   const [form, setForm] = useState(DEFAULT_FORM)
   const [history, setHistory] = useState(loadHistory)
   const [batchList, setBatchList] = useState([])
+  const [hiddenBatchForm, setHiddenBatchForm] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const previewRef = useRef(null)
+  const hiddenRef = useRef(null)
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
 
@@ -89,11 +89,11 @@ export default function App() {
 
   const handleClearBatch = () => setBatchList([])
 
-  // ── Single capture (PNG) ──
-  const captureCanvas = async () => {
+  // ── Single PNG ──
+  const captureCanvas = async (el) => {
     await document.fonts.ready
-    await new Promise((r) => setTimeout(r, 150))
-    return html2canvas(previewRef.current, {
+    await new Promise(r => setTimeout(r, 150))
+    return html2canvas(el, {
       scale: 3, useCORS: true, allowTaint: true,
       backgroundColor: '#ffffff', imageTimeout: 15000, logging: false,
     })
@@ -102,7 +102,7 @@ export default function App() {
   const exportPNG = async () => {
     setExporting(true)
     try {
-      const canvas = await captureCanvas()
+      const canvas = await captureCanvas(previewRef.current)
       const link = document.createElement('a')
       link.download = `placa-${form.productName || 'produto'}.png`
       link.href = canvas.toDataURL('image/png')
@@ -134,46 +134,37 @@ export default function App() {
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Boogaloo&family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page { size: A4 ${isPortrait ? 'portrait' : 'landscape'}; margin: 0; }
-  *, *::before, *::after {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    box-sizing: border-box;
-  }
+  *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: white; overflow: hidden; }
-  body {
-    width: ${isPortrait ? '210mm' : '297mm'};
-    height: ${isPortrait ? '297mm' : '210mm'};
-    position: relative;
-  }
-  #sign-wrap {
-    position: absolute;
-    top: 0; left: 0;
-    transform-origin: top left;
-    transform: scale(${scale.toFixed(6)});
-  }
+  body { width: ${isPortrait ? '210mm' : '297mm'}; height: ${isPortrait ? '297mm' : '210mm'}; position: relative; }
+  #sign-wrap { position: absolute; top: 0; left: 0; transform-origin: top left; transform: scale(${scale.toFixed(6)}); }
 </style>
 </head>
 <body>
 <div id="sign-wrap">${signEl.outerHTML}</div>
 <script>
-  document.fonts.ready.then(function() {
-    setTimeout(function() { window.print(); }, 1000);
-  });
+  document.fonts.ready.then(function() { setTimeout(function() { window.print(); }, 1000); });
 </script>
 </body>
 </html>`)
     pw.document.close()
   }
 
-  // ── Batch PDF (multi-page) ──
+  // ── Batch PDF: renders each sign into hidden container, captures outerHTML ──
   const exportBatchPDF = () => {
     if (batchList.length === 0) return
-    const signW = 500, signH = 707
-    const pageW = 210 * 3.7795
-    const pageH = 297 * 3.7795
-    const scale = Math.min(pageW / signW, pageH / signH).toFixed(6)
 
-    const signsHTML = batchList.map(item => renderToStaticMarkup(<SignPreview form={item} />))
+    const signW = 500, signH = 707
+    const scale = Math.min(210 * 3.7795 / signW, 297 * 3.7795 / signH).toFixed(6)
+    const signsHTML = []
+
+    for (const item of batchList) {
+      flushSync(() => setHiddenBatchForm(item))
+      if (hiddenRef.current) signsHTML.push(hiddenRef.current.outerHTML)
+    }
+    flushSync(() => setHiddenBatchForm(null))
+
+    if (signsHTML.length === 0) return
 
     const pw = window.open('', '_blank', 'width=900,height=1100')
     if (!pw) { alert('Permite popups neste site para exportar o PDF.'); return }
@@ -187,61 +178,39 @@ export default function App() {
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Boogaloo&family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page { size: A4 portrait; margin: 0; }
-  *, *::before, *::after {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    box-sizing: border-box;
-  }
+  *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: white; }
-  .page {
-    width: 210mm; height: 297mm;
-    position: relative; overflow: hidden;
-    page-break-after: always;
-  }
+  .page { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; }
   .page:last-child { page-break-after: avoid; }
-  .sign-wrap {
-    position: absolute; top: 0; left: 0;
-    transform-origin: top left;
-    transform: scale(${scale});
-  }
+  .sign-wrap { position: absolute; top: 0; left: 0; transform-origin: top left; transform: scale(${scale}); }
 </style>
 </head>
 <body>
 ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div></div>`).join('')}
 <script>
-  document.fonts.ready.then(function() {
-    setTimeout(function() { window.print(); }, 1200);
-  });
+  document.fonts.ready.then(function() { setTimeout(function() { window.print(); }, 1200); });
 </script>
 </body>
 </html>`)
     pw.document.close()
   }
 
-  // ── Batch ZIP (PNG por placa) ──
+  // ── Batch ZIP: renders each sign hidden, captures via html2canvas ──
   const exportBatchZIP = async () => {
     if (batchList.length === 0) return
     setExporting(true)
     try {
       const JSZip = (await import('jszip')).default
       const zip = new JSZip()
-
       await document.fonts.ready
-
-      // Hidden container to render each sign
-      const container = document.createElement('div')
-      container.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden;'
-      document.body.appendChild(container)
-      const root = createRoot(container)
 
       for (let i = 0; i < batchList.length; i++) {
         const item = batchList[i]
-        flushSync(() => root.render(<SignPreview form={item} />))
+        flushSync(() => setHiddenBatchForm(item))
         await new Promise(r => setTimeout(r, 200))
 
-        const signEl = container.querySelector('[style*="500px"]')
-        if (signEl) {
-          const canvas = await html2canvas(signEl, {
+        if (hiddenRef.current) {
+          const canvas = await html2canvas(hiddenRef.current, {
             scale: 3, useCORS: true, allowTaint: true,
             backgroundColor: '#ffffff', imageTimeout: 15000, logging: false,
           })
@@ -251,15 +220,20 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
         }
       }
 
-      root.unmount()
-      document.body.removeChild(container)
+      flushSync(() => setHiddenBatchForm(null))
 
       const content = await zip.generateAsync({ type: 'blob' })
       const link = document.createElement('a')
       link.href = URL.createObjectURL(content)
       link.download = 'placas-makeprice.zip'
       link.click()
-    } finally { setExporting(false) }
+    } catch (err) {
+      console.error('Batch ZIP error:', err)
+      alert('Erro ao gerar ZIP. Tente novamente.')
+    } finally {
+      setExporting(false)
+      flushSync(() => setHiddenBatchForm(null))
+    }
   }
 
   return (
@@ -281,7 +255,7 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
         </div>
       </header>
 
-      {/* Saved flash notification */}
+      {/* Saved flash */}
       <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${savedFlash ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
         <div className="bg-green-600 text-white text-sm font-bold px-5 py-2.5 rounded-full shadow-lg">
           ✓ Placa salva no histórico!
@@ -291,7 +265,6 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
       {/* Main layout */}
       <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex flex-col lg:flex-row gap-6 items-start">
-          {/* Form panel */}
           <div className="w-full lg:w-[320px] flex-shrink-0 rounded-2xl overflow-hidden shadow-lg border border-slate-200">
             <FormPanel
               form={form}
@@ -312,27 +285,29 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
             />
           </div>
 
-          {/* Preview panel */}
           <div className="flex-1 flex flex-col items-center gap-4">
             <div className="w-full flex items-center justify-between px-1">
-              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">
-                Pré-visualização
-              </h2>
+              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Pré-visualização</h2>
               <span className="text-xs text-slate-400">Preview em tempo real</span>
             </div>
-
             <div className="w-full flex justify-center overflow-x-auto pb-2">
               <div className="shrink-0 shadow-2xl ring-1 ring-slate-300">
                 <SignPreview ref={previewRef} form={form} />
               </div>
             </div>
-
             <p className="text-xs text-slate-400 text-center">
               A placa exportada terá alta resolução (3×) — ideal para impressão
             </p>
           </div>
         </div>
       </main>
+
+      {/* Hidden sign used for batch rendering — never visible */}
+      {hiddenBatchForm && (
+        <div style={{ position: 'fixed', left: '-9999px', top: 0, visibility: 'hidden', pointerEvents: 'none' }}>
+          <SignPreview ref={hiddenRef} form={hiddenBatchForm} />
+        </div>
+      )}
     </div>
   )
 }
