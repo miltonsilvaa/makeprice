@@ -1,5 +1,9 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
+import QRCode from 'qrcode'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { flushSync } from 'react-dom'
+import { createRoot } from 'react-dom/client'
 import FormPanel from './components/FormPanel'
 import SignPreview from './components/SignPreview'
 
@@ -11,6 +15,8 @@ const DEFAULT_FORM = {
   customUnit: '',
   highlightText: 'HOJE É DIA DE FEIRA',
   footerText: '',
+  instagramUser: '',
+  qrDataUrl: '',
   template: 'feira',
   bannerColor: '#D32F2F',
   priceColor: '#D32F2F',
@@ -28,11 +34,27 @@ function saveHistory(list) {
 export default function App() {
   const [form, setForm] = useState(DEFAULT_FORM)
   const [history, setHistory] = useState(loadHistory)
+  const [batchList, setBatchList] = useState([])
   const [exporting, setExporting] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const previewRef = useRef(null)
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
+
+  // Generate QR data URL whenever instagramUser changes
+  useEffect(() => {
+    const user = (form.instagramUser || '').trim()
+    if (!user) {
+      setForm(prev => ({ ...prev, qrDataUrl: '' }))
+      return
+    }
+    QRCode.toDataURL(`https://instagram.com/${user}`, {
+      width: 168, margin: 1,
+      color: { dark: '#333333', light: '#FFFFFF' },
+    })
+      .then(dataUrl => setForm(prev => ({ ...prev, qrDataUrl: dataUrl })))
+      .catch(() => setForm(prev => ({ ...prev, qrDataUrl: '' })))
+  }, [form.instagramUser])
 
   const handleSave = () => {
     if (!form.productName) return
@@ -55,17 +77,25 @@ export default function App() {
     saveHistory(next)
   }
 
+  // ── Batch handlers ──
+  const handleAddToBatch = () => {
+    if (!form.productName) return
+    setBatchList(prev => [...prev, { ...form, batchId: Date.now() }])
+  }
+
+  const handleRemoveFromBatch = (batchId) => {
+    setBatchList(prev => prev.filter(item => item.batchId !== batchId))
+  }
+
+  const handleClearBatch = () => setBatchList([])
+
+  // ── Single capture (PNG) ──
   const captureCanvas = async () => {
-    // Wait for all custom fonts (Google Fonts) to fully load before capturing
     await document.fonts.ready
     await new Promise((r) => setTimeout(r, 150))
     return html2canvas(previewRef.current, {
-      scale: 3,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      imageTimeout: 15000,
-      logging: false,
+      scale: 3, useCORS: true, allowTaint: true,
+      backgroundColor: '#ffffff', imageTimeout: 15000, logging: false,
     })
   }
 
@@ -80,18 +110,16 @@ export default function App() {
     } finally { setExporting(false) }
   }
 
+  // ── Single PDF ──
   const exportPDF = () => {
     const signEl = previewRef.current
     if (!signEl) return
 
     const isPortrait = form.template === 'feira'
-    // Sign pixel dimensions
     const signW = isPortrait ? 500 : 560
     const signH = isPortrait ? 707 : 420
-    // A4 in px at 96 dpi (1mm = 3.7795px)
     const pageW = isPortrait ? 210 * 3.7795 : 297 * 3.7795
     const pageH = isPortrait ? 297 * 3.7795 : 210 * 3.7795
-    // Scale to fill — feira matches A4 ratio exactly; others letterbox
     const scale = Math.min(pageW / signW, pageH / signH)
 
     const pw = window.open('', '_blank', 'width=900,height=1100')
@@ -137,6 +165,103 @@ export default function App() {
     pw.document.close()
   }
 
+  // ── Batch PDF (multi-page) ──
+  const exportBatchPDF = () => {
+    if (batchList.length === 0) return
+    const signW = 500, signH = 707
+    const pageW = 210 * 3.7795
+    const pageH = 297 * 3.7795
+    const scale = Math.min(pageW / signW, pageH / signH).toFixed(6)
+
+    const signsHTML = batchList.map(item => renderToStaticMarkup(<SignPreview form={item} />))
+
+    const pw = window.open('', '_blank', 'width=900,height=1100')
+    if (!pw) { alert('Permite popups neste site para exportar o PDF.'); return }
+
+    pw.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Boogaloo&family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box;
+  }
+  html, body { margin: 0; padding: 0; background: white; }
+  .page {
+    width: 210mm; height: 297mm;
+    position: relative; overflow: hidden;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: avoid; }
+  .sign-wrap {
+    position: absolute; top: 0; left: 0;
+    transform-origin: top left;
+    transform: scale(${scale});
+  }
+</style>
+</head>
+<body>
+${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div></div>`).join('')}
+<script>
+  document.fonts.ready.then(function() {
+    setTimeout(function() { window.print(); }, 1200);
+  });
+</script>
+</body>
+</html>`)
+    pw.document.close()
+  }
+
+  // ── Batch ZIP (PNG por placa) ──
+  const exportBatchZIP = async () => {
+    if (batchList.length === 0) return
+    setExporting(true)
+    try {
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+
+      await document.fonts.ready
+
+      // Hidden container to render each sign
+      const container = document.createElement('div')
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden;'
+      document.body.appendChild(container)
+      const root = createRoot(container)
+
+      for (let i = 0; i < batchList.length; i++) {
+        const item = batchList[i]
+        flushSync(() => root.render(<SignPreview form={item} />))
+        await new Promise(r => setTimeout(r, 200))
+
+        const signEl = container.querySelector('[style*="500px"]')
+        if (signEl) {
+          const canvas = await html2canvas(signEl, {
+            scale: 3, useCORS: true, allowTaint: true,
+            backgroundColor: '#ffffff', imageTimeout: 15000, logging: false,
+          })
+          const blob = await new Promise(r => canvas.toBlob(r, 'image/png'))
+          const name = `${(item.productName || 'placa').toLowerCase().replace(/\s+/g, '-')}-${i + 1}.png`
+          zip.file(name, blob)
+        }
+      }
+
+      root.unmount()
+      document.body.removeChild(container)
+
+      const content = await zip.generateAsync({ type: 'blob' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(content)
+      link.download = 'placas-makeprice.zip'
+      link.click()
+    } finally { setExporting(false) }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200">
       {/* Header */}
@@ -178,6 +303,12 @@ export default function App() {
               onLoadHistory={handleLoadHistory}
               onDeleteHistory={handleDeleteHistory}
               exporting={exporting}
+              batchList={batchList}
+              onAddToBatch={handleAddToBatch}
+              onRemoveFromBatch={handleRemoveFromBatch}
+              onClearBatch={handleClearBatch}
+              onExportBatchPDF={exportBatchPDF}
+              onExportBatchZIP={exportBatchZIP}
             />
           </div>
 

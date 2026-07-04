@@ -25,7 +25,7 @@ const SignPreview = forwardRef(function SignPreview({ form }, ref) {
   const {
     productName, variety, price, unit, customUnit,
     highlightText, bannerColor, priceColor, accentColor,
-    footerText, template = 'feira',
+    footerText, qrDataUrl = '', template = 'feira',
   } = form
 
   const displayUnit  = unit === 'OUTRO' ? customUnit : (UNIT_LABELS[unit] || unit)
@@ -51,7 +51,7 @@ const SignPreview = forwardRef(function SignPreview({ form }, ref) {
 
   const ctx = {
     displayProduct, displayUnit, unitShort, showVariety, showPrice,
-    reais, centavos, variety, highlightText, footerText,
+    reais, centavos, variety, highlightText, footerText, qrDataUrl,
     bannerColor, priceColor, accentColor,
   }
 
@@ -66,13 +66,14 @@ const SignPreview = forwardRef(function SignPreview({ form }, ref) {
 })
 
 /* ─── TEMPLATE: FEIRA TRADICIONAL ─── */
-function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reais, centavos, variety, highlightText, footerText, bannerColor, priceColor, accentColor }) {
+function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reais, centavos, variety, highlightText, footerText, qrDataUrl, bannerColor, priceColor, accentColor }) {
 
   // Proportional section heights — must sum to 707px
   const BANNER_H  = 148
   const PRODUCT_H = 118
   const VARIETY_H = showVariety ? 52 : 0
-  const FOOTER_H  = footerText ? 44 : 0
+  const hasFooter = !!(footerText || qrDataUrl)
+  const FOOTER_H  = hasFooter ? 76 : 0
   const PRICE_H   = 707 - BANNER_H - PRODUCT_H - VARIETY_H - FOOTER_H
 
   // Product name: scales with character count — wider range for more prominence
@@ -212,23 +213,35 @@ function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reai
         </div>
       </div>
 
-      {/* ── Rodapé (opcional) ── */}
-      {footerText && (
+      {/* ── Rodapé + QR code (opcional) ── */}
+      {hasFooter && (
         <div style={{
           height: `${FOOTER_H}px`, flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: '12px',
           borderTop: `2px dashed ${bannerColor}55`,
-          padding: '0 20px',
+          padding: '0 16px',
         }}>
-          <span style={{
-            fontFamily: "'Fredoka One', cursive",
-            fontSize: '20px',
-            color: '#555',
-            letterSpacing: '1px',
-            textAlign: 'center',
-          }}>
-            {footerText}
-          </span>
+          {qrDataUrl && (
+            <img
+              src={qrDataUrl}
+              width={54} height={54}
+              style={{ flexShrink: 0, borderRadius: '4px', display: 'block' }}
+              alt=""
+            />
+          )}
+          {footerText && (
+            <span style={{
+              fontFamily: "'Fredoka One', cursive",
+              fontSize: qrDataUrl ? '16px' : '20px',
+              color: '#555',
+              letterSpacing: '1px',
+              textAlign: 'center',
+              lineHeight: 1.25,
+            }}>
+              {footerText}
+            </span>
+          )}
         </div>
       )}
     </div>

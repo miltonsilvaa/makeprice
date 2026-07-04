@@ -21,16 +21,29 @@ const TABS = [
   { id: 'produto', label: 'Produto', icon: '🥬' },
   { id: 'preco', label: 'Preço', icon: '💰' },
   { id: 'cores', label: 'Cores', icon: '🎨' },
+  { id: 'lote', label: 'Lote', icon: '📦' },
   { id: 'salvo', label: 'Salvo', icon: '📋' },
 ]
 
-export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSave, history, onLoadHistory, onDeleteHistory, exporting }) {
+export default function FormPanel({
+  form, update,
+  onExportPNG, onExportPDF, onSave,
+  history, onLoadHistory, onDeleteHistory,
+  exporting,
+  batchList, onAddToBatch, onRemoveFromBatch, onClearBatch,
+  onExportBatchPDF, onExportBatchZIP,
+}) {
   const [activeTab, setActiveTab] = useState('produto')
 
   const applyTheme = (theme) => {
     update('bannerColor', theme.bannerColor)
     update('priceColor', theme.priceColor)
     update('accentColor', theme.accentColor)
+  }
+
+  const handleAddToBatch = () => {
+    onAddToBatch()
+    setActiveTab('lote')
   }
 
   return (
@@ -41,7 +54,7 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-3 text-xs font-bold tracking-wide transition-colors ${
+            className={`flex-1 py-2.5 text-[10px] font-bold tracking-wide transition-colors relative ${
               activeTab === tab.id
                 ? 'border-b-[3px] border-green-600 text-green-700 bg-green-50'
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
@@ -49,6 +62,11 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
           >
             <span className="block text-sm">{tab.icon}</span>
             {tab.label}
+            {tab.id === 'lote' && batchList.length > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-green-600 text-white text-[9px] font-black flex items-center justify-center">
+                {batchList.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -74,7 +92,20 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
 
             <Field label="Texto do rodapé">
               <input type="text" value={form.footerText} onChange={(e) => update('footerText', e.target.value)} placeholder="Ex: Produto Nacional, Orgânico... (opcional)" className="input" />
-              <p className="text-xs text-slate-400 mt-1">Aparece na parte inferior da placa</p>
+            </Field>
+
+            <Field label="Instagram da loja (QR Code)">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-bold text-sm select-none">@</span>
+                <input
+                  type="text"
+                  value={form.instagramUser}
+                  onChange={(e) => update('instagramUser', e.target.value.replace(/[@\s]/g, ''))}
+                  placeholder="nomeda_loja"
+                  className="input flex-1"
+                />
+              </div>
+              <p className="text-xs text-slate-400 mt-1">QR code aparece ao lado do rodapé</p>
             </Field>
           </div>
         )}
@@ -116,7 +147,6 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
         {/* ── TAB: CORES ── */}
         {activeTab === 'cores' && (
           <div className="flex flex-col gap-6">
-            {/* Layout templates */}
             <div>
               <p className="text-sm font-bold text-slate-600 mb-3">Layout da placa</p>
               <div className="flex flex-col gap-2">
@@ -145,7 +175,6 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
 
             <div className="h-px bg-slate-100" />
 
-            {/* Color themes */}
             <div>
               <p className="text-sm font-bold text-slate-600 mb-3">Temas de cores prontos</p>
               <div className="grid grid-cols-2 gap-2">
@@ -165,7 +194,6 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
               </div>
             </div>
 
-            {/* Manual pickers */}
             <div>
               <p className="text-sm font-bold text-slate-600 mb-3">Personalizar cores</p>
               <div className="flex flex-col gap-4">
@@ -174,6 +202,67 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
                 <ColorRow label="Detalhes decorativos" value={form.accentColor} onChange={(v) => update('accentColor', v)} />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── TAB: LOTE ── */}
+        {activeTab === 'lote' && (
+          <div className="flex flex-col gap-4">
+            {batchList.length === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-4xl mb-3">📦</p>
+                <p className="text-sm font-bold text-slate-500">Lote vazio</p>
+                <p className="text-xs text-slate-400 mt-1">Configure uma placa e clique em "Adicionar ao lote"</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-slate-600">{batchList.length} placa{batchList.length > 1 ? 's' : ''} no lote</p>
+                  <button onClick={onClearBatch} className="text-xs text-red-500 hover:text-red-700 font-semibold transition-colors">
+                    Limpar tudo
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {batchList.map((item, i) => (
+                    <div key={item.batchId} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex flex-col overflow-hidden border border-slate-200">
+                        <div className="flex-1" style={{ background: item.bannerColor }} />
+                        <div className="flex-1" style={{ background: item.priceColor }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{item.productName}</p>
+                        <p className="text-xs text-slate-500">
+                          {item.price ? `R$ ${item.price}` : '—'} · {item.unit === 'OUTRO' ? item.customUnit : item.unit}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onRemoveFromBatch(item.batchId)}
+                        className="w-7 h-7 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold flex items-center justify-center transition-colors flex-shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={onExportBatchPDF}
+                    className="w-full py-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm tracking-wide transition-colors"
+                  >
+                    Imprimir todas (PDF)
+                  </button>
+                  <button
+                    onClick={onExportBatchZIP}
+                    disabled={exporting}
+                    className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-60"
+                  >
+                    {exporting ? 'Gerando...' : 'Baixar todas (ZIP)'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -202,13 +291,22 @@ export default function FormPanel({ form, update, onExportPNG, onExportPDF, onSa
 
       {/* Export + Save buttons */}
       <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col gap-2">
-        <button
-          onClick={onSave}
-          disabled={!form.productName}
-          className="w-full py-2.5 rounded-xl border-2 border-green-600 text-green-700 font-bold text-sm tracking-wide hover:bg-green-50 active:bg-green-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          💾 Salvar placa no histórico
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onSave}
+            disabled={!form.productName}
+            className="flex-1 py-2.5 rounded-xl border-2 border-green-600 text-green-700 font-bold text-sm tracking-wide hover:bg-green-50 active:bg-green-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            💾 Salvar
+          </button>
+          <button
+            onClick={handleAddToBatch}
+            disabled={!form.productName}
+            className="flex-1 py-2.5 rounded-xl border-2 border-slate-500 text-slate-700 font-bold text-sm tracking-wide hover:bg-slate-100 active:bg-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            + Lote
+          </button>
+        </div>
         <div className="flex gap-2">
           <button onClick={onExportPNG} disabled={exporting} className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-60">
             {exporting ? '...' : '⬇ PNG'}
@@ -297,13 +395,11 @@ function HistoryCard({ entry, onLoad, onDelete }) {
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 transition-all group">
-      {/* Color preview */}
       <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border border-slate-200 flex flex-col">
         <div className="flex-1" style={{ background: entry.bannerColor }} />
         <div className="flex-1" style={{ background: entry.priceColor }} />
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-slate-800 truncate">{entry.productName}</p>
         <p className="text-xs text-slate-500">
@@ -313,7 +409,6 @@ function HistoryCard({ entry, onLoad, onDelete }) {
         <p className="text-xs text-slate-400">{dateStr}</p>
       </div>
 
-      {/* Actions */}
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={onLoad} title="Carregar" className="w-8 h-8 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 font-bold text-sm flex items-center justify-center transition-colors">
           ↩
