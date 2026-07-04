@@ -70,19 +70,22 @@ function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reai
 
   // Proportional section heights — must sum to 707px
   const BANNER_H  = 148
-  const PRODUCT_H = 100
+  const PRODUCT_H = 118
   const VARIETY_H = showVariety ? 52 : 0
-  const UNIT_H    = 68
-  const PRICE_H   = 707 - BANNER_H - PRODUCT_H - VARIETY_H - UNIT_H
-  // PRICE_H ≈ 339 (with variety) | 391 (without variety)
+  const FOOTER_H  = footerText ? 44 : 0
+  const PRICE_H   = 707 - BANNER_H - PRODUCT_H - VARIETY_H - FOOTER_H
 
-  // Product name: scales with character count
-  const nameFontSize = Math.max(56, Math.min(92, Math.floor(440 / Math.max(displayProduct.length, 4))))
+  // Product name: scales with character count — wider range for more prominence
+  const nameFontSize = Math.max(76, Math.min(112, Math.floor(480 / Math.max(displayProduct.length, 4))))
 
-  // Price: constrained by both height and width (468px content)
-  // Width limit: reais chars × 0.68 × size + cents chars × 0.68 × centsSize ≤ 468
-  const reaisFontSize = reais.length <= 1 ? 295 : reais.length <= 2 ? 210 : 160
+  // Price font sizes — increased for better visual impact; width-tested at 468px content area
+  const reaisFontSize = reais.length <= 1 ? 328 : reais.length <= 2 ? 248 : 185
   const centsFontSize = Math.round(reaisFontSize * 0.42)
+  const unitFontSize  = Math.round(reaisFontSize * 0.30)
+
+  // Right column height spans the reais visual height (used to space cents + KG)
+  const extY = Math.round(reaisFontSize / 20)
+  const priceGroupH = Math.round(reaisFontSize * 0.9) + extY
 
   // 3D extrusion depth proportional to font size (text-shadow stacking)
   const makeShadow = (size) => {
@@ -90,20 +93,8 @@ function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reai
     return Array.from({ length: depth }, (_, i) => `${i + 1}px ${i + 1}px 0 #000`).join(', ')
   }
 
-  // Simulates text-stroke via 8-direction shadow (html2canvas doesn't support -webkit-text-stroke)
-  const makeStroke = (width, color) => {
-    const w = width
-    return [
-      `${w}px 0 0 ${color}`, `-${w}px 0 0 ${color}`,
-      `0 ${w}px 0 ${color}`, `0 -${w}px 0 ${color}`,
-      `${w}px ${w}px 0 ${color}`, `-${w}px ${w}px 0 ${color}`,
-      `${w}px -${w}px 0 ${color}`, `-${w}px -${w}px 0 ${color}`,
-    ].join(', ')
-  }
-
-  const nameStrokeW  = Math.max(3, Math.round(nameFontSize / 16))
-  // Combined: stroke outline + subtle drop shadow
-  const nameShadow = makeStroke(nameStrokeW, '#111') + ', 4px 4px 0 rgba(0,0,0,0.22)'
+  // Clean solid 3D shadow for product name — solid offsets, no blurry stroke simulation
+  const nameShadow = '3px 3px 0 #111, 5px 5px 0 rgba(0,0,0,0.35)'
 
   const bannerShadow = '2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000'
 
@@ -120,7 +111,7 @@ function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reai
       }}>
         <div style={{
           fontFamily: "'Bangers', cursive",
-          fontSize: '46px', lineHeight: 1.05,
+          fontSize: '62px', lineHeight: 1.0,
           color: '#fff', textShadow: bannerShadow,
           letterSpacing: '3px', textTransform: 'uppercase',
           textAlign: 'center', maxWidth: '90%', wordBreak: 'break-word',
@@ -190,40 +181,56 @@ function TemplateFeira({ displayProduct, unitShort, showVariety, showPrice, reai
           }}>
             {showPrice ? reais : '0'}
           </span>
-          {/* Centavos — menor, alinhado ao topo */}
-          <span style={{
-            fontFamily: "'Fredoka One', cursive",
-            fontSize: `${centsFontSize}px`,
-            lineHeight: 1,
-            color: priceColor,
-            textShadow: makeShadow(centsFontSize),
+          {/* Coluna direita: centavos (topo) + unidade (baixo) */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            height: `${priceGroupH}px`,
             paddingLeft: '6px',
-            letterSpacing: '0px',
+            paddingBottom: '4px',
           }}>
-            ,{showPrice ? centavos : '00'}
-          </span>
+            <span style={{
+              fontFamily: "'Fredoka One', cursive",
+              fontSize: `${centsFontSize}px`,
+              lineHeight: 1,
+              color: priceColor,
+              textShadow: makeShadow(centsFontSize),
+              letterSpacing: '0px',
+            }}>
+              ,{showPrice ? centavos : '00'}
+            </span>
+            <span style={{
+              fontFamily: "'Fredoka One', cursive",
+              fontSize: `${unitFontSize}px`,
+              color: '#1a1a1a',
+              textShadow: makeShadow(unitFontSize),
+              letterSpacing: '4px',
+              textTransform: 'uppercase',
+            }}>
+              {unitShort}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* ── Unidade ── */}
-      <div style={{
-        height: `${UNIT_H}px`, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderTop: `2px dashed ${bannerColor}55`,
-      }}>
-        <span style={{
-          fontFamily: "'Fredoka One', cursive",
-          fontSize: '36px',
-          color: '#222',
-          letterSpacing: '6px',
-          textTransform: 'uppercase',
-          textShadow: '2px 2px 0 rgba(0,0,0,0.15)',
+      {/* ── Rodapé (opcional) ── */}
+      {footerText && (
+        <div style={{
+          height: `${FOOTER_H}px`, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderTop: `2px dashed ${bannerColor}55`,
+          padding: '0 20px',
         }}>
-          {unitShort}
-        </span>
-      </div>
-
-      {footerText && <FooterText text={footerText} accentColor={accentColor} />}
+          <span style={{
+            fontFamily: "'Fredoka One', cursive",
+            fontSize: '20px',
+            color: '#555',
+            letterSpacing: '1px',
+            textAlign: 'center',
+          }}>
+            {footerText}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -345,10 +352,17 @@ function Flourish({ color, mirror }) {
 
 function FeiraCurl({ color, mirror }) {
   return (
-    <svg width="44" height="26" viewBox="0 0 44 26" style={{ transform: mirror ? 'scaleX(-1)' : 'none', flexShrink: 0 }} fill="none">
-      <path d="M8,13 C8,7 12,3 17,3 C22,3 25.5,6.5 25.5,11 C25.5,14.5 23,17.5 19.5,17.5 C17.5,17.5 16,16 16,14.5 C16,13 17,12 18.5,12 C19.5,12 20,12.8 20,13.5" stroke={color} strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M25.5,11 C30,10 36,11.5 42,13.5" stroke={color} strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M8,13 C7,16.5 6.5,20 7.5,23" stroke={color} strokeWidth="2.5" strokeLinecap="round" fill="none" />
+    <svg
+      width="42" height="14" viewBox="0 0 42 14"
+      style={{ transform: mirror ? 'scaleX(-1)' : 'none', flexShrink: 0 }}
+      fill="none"
+    >
+      {/* Elegant thin arc — outer end (left) → inner end (right, near text) */}
+      <path d="M4 7 C10 4, 28 4, 38 7" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      {/* Small filled circle at outer end */}
+      <circle cx="4" cy="7" r="2.2" fill={color} />
+      {/* Small diamond at inner end, pointing toward text */}
+      <path d="M38 7 L40 5 L42 7 L40 9 Z" fill={color} />
     </svg>
   )
 }
