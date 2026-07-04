@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Nunito', sans-serif;
+  background: #f1f5f9;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+}
+
+input[type='color'] {
+  -webkit-appearance: none;
+  border: none;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.input {
+  @apply w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-sm font-semibold outline-none transition-colors;
+  @apply focus:border-green-500 focus:bg-white focus:ring-2 focus:ring-green-100;
+}
+
+select.input {
+  @apply cursor-pointer;
+}
