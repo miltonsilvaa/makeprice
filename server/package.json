@@ -1,0 +1,16 @@
+{
+  "name": "makeprice-backend",
+  "version": "1.0.0",
+  "description": "Backend do MakePrice — recebe webhooks do WhatsApp e expoe API REST",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "lowdb": "^1.0.0"
+  }
+}

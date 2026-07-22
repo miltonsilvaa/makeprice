@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import FinancePanel from './FinancePanel'
 
 const UNITS = ['KG', 'UN', 'DZ', 'CX', 'PCT', 'L', 'OUTRO']
 const UNIT_LABELS = { KG: 'KG – Quilograma', UN: 'UN – Unidade', DZ: 'DZ – Dúzia', CX: 'CX – Caixa', PCT: 'PCT – Pacote', L: 'L – Litro', OUTRO: 'Outro...' }
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'cores', label: 'Cores', icon: '🎨' },
   { id: 'lote', label: 'Lote', icon: '📦' },
   { id: 'salvo', label: 'Salvo', icon: '📋' },
+  { id: 'financas', label: 'Finanças', icon: '💵' },
 ]
 
 export default function FormPanel({
@@ -249,9 +251,10 @@ export default function FormPanel({
                 <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
                   <button
                     onClick={onExportBatchPDF}
-                    className="w-full py-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm tracking-wide transition-colors"
+                    disabled={exporting}
+                    className="w-full py-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-60"
                   >
-                    Imprimir todas (PDF)
+                    {exporting ? 'Gerando...' : 'Imprimir todas (PDF)'}
                   </button>
                   <button
                     onClick={onExportBatchZIP}
@@ -286,6 +289,11 @@ export default function FormPanel({
               ))
             )}
           </div>
+        )}
+
+        {/* ── TAB: FINANÇAS ── */}
+        {activeTab === 'financas' && (
+          <FinancePanel />
         )}
       </div>
 

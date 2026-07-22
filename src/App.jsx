@@ -94,7 +94,7 @@ export default function App() {
     await document.fonts.ready
     await new Promise(r => setTimeout(r, 150))
     return html2canvas(el, {
-      scale: 3, useCORS: true, allowTaint: true,
+      scale: 2, useCORS: true, allowTaint: true,
       backgroundColor: '#ffffff', imageTimeout: 15000, logging: false,
     })
   }
@@ -151,25 +151,27 @@ export default function App() {
   }
 
   // ── Batch PDF: renders each sign into hidden container, captures outerHTML ──
-  const exportBatchPDF = () => {
+  const exportBatchPDF = async () => {
     if (batchList.length === 0) return
+    setExporting(true)
 
-    const signW = 500, signH = 707
-    const scale = Math.min(210 * 3.7795 / signW, 297 * 3.7795 / signH).toFixed(6)
-    const signsHTML = []
+    try {
+      const signW = 500, signH = 707
+      const scale = Math.min(210 * 3.7795 / signW, 297 * 3.7795 / signH).toFixed(6)
+      const signsHTML = []
 
-    for (const item of batchList) {
-      flushSync(() => setHiddenBatchForm(item))
-      if (hiddenRef.current) signsHTML.push(hiddenRef.current.outerHTML)
-    }
-    flushSync(() => setHiddenBatchForm(null))
+      for (const item of batchList) {
+        flushSync(() => setHiddenBatchForm(item))
+        await new Promise(r => setTimeout(r, 60)) // yield ao browser entre cada render
+        if (hiddenRef.current) signsHTML.push(hiddenRef.current.outerHTML)
+      }
 
-    if (signsHTML.length === 0) return
+      if (signsHTML.length === 0) return
 
-    const pw = window.open('', '_blank', 'width=900,height=1100')
-    if (!pw) { alert('Permite popups neste site para exportar o PDF.'); return }
+      const pw = window.open('', '_blank', 'width=900,height=1100')
+      if (!pw) { alert('Permite popups neste site para exportar o PDF.'); return }
 
-    pw.document.write(`<!DOCTYPE html>
+      pw.document.write(`<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -192,7 +194,14 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
 </script>
 </body>
 </html>`)
-    pw.document.close()
+      pw.document.close()
+    } catch (err) {
+      console.error('Batch PDF error:', err)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    } finally {
+      setExporting(false)
+      setHiddenBatchForm(null)
+    }
   }
 
   // ── Batch ZIP: renders each sign hidden, captures via html2canvas ──
@@ -211,7 +220,7 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
 
         if (hiddenRef.current) {
           const canvas = await html2canvas(hiddenRef.current, {
-            scale: 3, useCORS: true, allowTaint: true,
+            scale: 2, useCORS: true, allowTaint: true,
             backgroundColor: '#ffffff', imageTimeout: 15000, logging: false,
           })
           const blob = await new Promise(r => canvas.toBlob(r, 'image/png'))
@@ -220,7 +229,7 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
         }
       }
 
-      flushSync(() => setHiddenBatchForm(null))
+      setHiddenBatchForm(null)
 
       const content = await zip.generateAsync({ type: 'blob' })
       const link = document.createElement('a')
@@ -232,7 +241,7 @@ ${signsHTML.map(html => `<div class="page"><div class="sign-wrap">${html}</div><
       alert('Erro ao gerar ZIP. Tente novamente.')
     } finally {
       setExporting(false)
-      flushSync(() => setHiddenBatchForm(null))
+      setHiddenBatchForm(null)
     }
   }
 
